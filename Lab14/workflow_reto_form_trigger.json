@@ -1,0 +1,282 @@
+{
+  "name": "Clasificador IA de Soporte (Reto - Formulario)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Soporte - Nueva solicitud",
+        "formDescription": "Describe tu problema. Usa solo datos ficticios.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "ticket",
+              "fieldType": "textarea",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n-form",
+      "name": "Formulario de soporte",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "clasificador-ia-soporte"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "n-ticket-0",
+              "name": "ticket",
+              "value": "={{ $json.ticket }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "n-ticket",
+      "name": "Edit Fields (ticket)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analiza la siguiente solicitud de soporte:\n\n{{ $json.ticket }}\n\nDebes:\n- identificar una categoría;\n- asignar prioridad alta, media o baja;\n- escribir un resumen de máximo 25 palabras;\n- proponer una respuesta breve y profesional.\n\nReglas de prioridad:\n- alta: cobros duplicados, fraude, seguridad, pérdida de dinero\n  o servicio completamente bloqueado;\n- media: problema funcional importante pero no crítico;\n- baja: consulta general, información o mejora.\n\n- No inventes información que no aparece en el ticket.",
+        "hasOutputParser": true
+      },
+      "id": "n-chain",
+      "name": "Basic LLM Chain",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "n-model",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        400,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"categoria\": {\n      \"type\": \"string\"\n    },\n    \"prioridad\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"alta\",\n        \"media\",\n        \"baja\"\n      ]\n    },\n    \"resumen\": {\n      \"type\": \"string\"\n    },\n    \"respuesta_sugerida\": {\n      \"type\": \"string\"\n    }\n  },\n  \"required\": [\n    \"categoria\",\n    \"prioridad\",\n    \"resumen\",\n    \"respuesta_sugerida\"\n  ]\n}"
+      },
+      "id": "n-parser",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        600,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c-alta",
+                    "leftValue": "={{ $json.output.prioridad }}",
+                    "rightValue": "alta",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ALTA"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "MEDIA / BAJA"
+        }
+      },
+      "id": "n-switch",
+      "name": "Switch (prioridad)",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "n-alta-0",
+              "name": "accion",
+              "value": "ESCALAR A HUMANO",
+              "type": "string"
+            },
+            {
+              "id": "n-alta-1",
+              "name": "motivo",
+              "value": "Ticket de alta prioridad detectado por IA",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "n-alta",
+      "name": "Escalar a humano",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1060,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "n-normal-0",
+              "name": "accion",
+              "value": "RESPUESTA NORMAL",
+              "type": "string"
+            },
+            {
+              "id": "n-normal-1",
+              "name": "motivo",
+              "value": "El ticket puede continuar por el flujo estándar",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "n-normal",
+      "name": "Respuesta normal",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1060,
+        120
+      ]
+    }
+  ],
+  "connections": {
+    "Edit Fields (ticket)": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Switch (prioridad)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch (prioridad)": {
+      "main": [
+        [
+          {
+            "node": "Escalar a humano",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta normal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formulario de soporte": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields (ticket)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
